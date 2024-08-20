@@ -1,10 +1,148 @@
-import React from 'react'
+/* eslint-disable no-unused-vars */
+import { useState, useEffect } from 'react'
 import './principal.css'
+import * as XLSX from 'xlsx'
 
 const Principal = () => {
+  const [datos, setDatos] = useState([])
+  const [datosDistribucion, setDatosDistribucion] = useState([])
+  const [, setDatosSeparados] = useState([])
+  const [nuevosDatos, setNuevosDatos] = useState([])
+
+  useEffect(() => {
+    if (datos.length > 0) {
+      procesarDatos(datos)
+    }
+  }, [datos])
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0]
+    const reader = new FileReader()
+
+    reader.onload = (e) => {
+      const filedatos = new Uint8Array(e.target.result)
+      const workbook = XLSX.read(filedatos, { type: 'array' })
+
+      const sheetName1 = workbook.SheetNames[0]
+      const sheetName2 = workbook.SheetNames[1]
+      const sheet1 = workbook.Sheets[sheetName1]
+      const sheet2 = workbook.Sheets[sheetName2]
+
+      const jsondatos = XLSX.utils.sheet_to_json(sheet1)
+      const jsondatosDistribucion = XLSX.utils.sheet_to_json(sheet2)
+      setDatos(jsondatos)
+      setDatosDistribucion(jsondatosDistribucion)
+    }
+
+    reader.readAsArrayBuffer(file)
+  }
+
+  const procesarDatos = (datos) => {
+    separarPorPallet(datos)
+  }
+
+  const separarPorPallet = (data) => {
+    const result = {}
+
+    data.forEach((obj) => {
+      const pallet = obj['N° Pallet']
+
+      if (!result[pallet]) {
+        result[pallet] = []
+      }
+      result[pallet].push({
+        ...obj,
+        Principal: 0,
+        Atahualpa: 0,
+        Carapungo: 0,
+        CRJ: 0
+      })
+    })
+
+    setDatosSeparados(result)
+    combinarDatos(result)
+  }
+
+  //! COMBINAR EN UN SOLO ARRAY
+  const combinarDatos = (datos) => {
+    const dat = Object.values(datos).flat()
+
+    setNuevosDatos(dat)
+  }
+
+  //! DISTRIBUIR
+  function distribuirCantidad (requerimientos, disponibilidades) {
+    disponibilidades.forEach((disponibilidad) => {
+      const item = disponibilidad['N° Item']
+      let cantidadRestante = disponibilidad.Cantidad
+
+      const ubicaciones = obtenerDistribucion(item, requerimientos)
+
+      const ub = Object.entries(ubicaciones).sort(([, a], [, b]) => b - a)
+
+      for (const [ubicacion, requerimiento] of ub) {
+        if (cantidadRestante >= requerimiento) {
+          disponibilidad[ubicacion] = requerimiento
+          cantidadRestante -= requerimiento
+        } else {
+          disponibilidad[ubicacion] = 0
+        }
+      }
+    })
+
+    return disponibilidades
+  }
+
+  const obtenerDistribucion = (item, requerimientos) => {
+    const req = { ...requerimientos.find(requerimiento => requerimiento['N° Item'] === item) }
+
+    if (req) {
+      delete req['N° Item']
+      return req
+    }
+  }
+
+  // TODO: GENERAR EXCEL
+  const generateExcel = () => {
+    const distribuciones = distribuirCantidad(datosDistribucion, nuevosDatos)
+    const wb = XLSX.utils.book_new()
+    const datos = distribuciones.map((item) => [
+      item['N° Item'],
+      item['N° Pallet'],
+      item.Cantidad,
+      item.Principal,
+      item.Atahualpa,
+      item.Carapungo,
+      item.CRJ
+    ])
+
+    const headers = [
+      'N° Item',
+      'N° Pallet',
+      'Cantidad',
+      'Principal',
+      'Atahualpa',
+      'Carapungo',
+      'CRJ'
+    ]
+
+    const wsData = [headers, ...datos]
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Reporte')
+
+    const wsCols = headers.map((header, index) => ({
+      wch: header.length + 20
+    }))
+    ws['!cols'] = wsCols
+
+    XLSX.writeFile(wb, 'Distribuciones.xlsx')
+  }
+
   return (
     <div className='main'>
-        <button>Descargar</button>
+      <input type='file' accept='.xlsx, .xls' onChange={handleFileUpload} />
+      <button onClick={generateExcel}>Descargar Excel</button>
     </div>
   )
 }
