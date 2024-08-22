@@ -52,10 +52,12 @@ const Principal = () => {
       }
       result[pallet].push({
         ...obj,
-        Principal: 0,
-        Atahualpa: 0,
-        Carapungo: 0,
-        CRJ: 0
+        NORTE: 0,
+        PRINCIPAL: 0,
+        ATAHUALPA: 0,
+        CARAPUNGO: 0,
+        CRJ: 0,
+        SAS: 0
       })
     })
 
@@ -72,6 +74,7 @@ const Principal = () => {
 
   //! DISTRIBUIR
   function distribuirCantidad (requerimientos, disponibilidades) {
+    let requ = requerimientos
     disponibilidades.forEach((disponibilidad) => {
       const item = disponibilidad['N° Item']
       let cantidadRestante = disponibilidad.Cantidad
@@ -79,13 +82,17 @@ const Principal = () => {
       const ubicaciones = obtenerDistribucion(item, requerimientos)
 
       const ub = Object.entries(ubicaciones).sort(([, a], [, b]) => b - a)
-
-      for (const [ubicacion, requerimiento] of ub) {
-        if (cantidadRestante >= requerimiento) {
-          disponibilidad[ubicacion] = requerimiento
-          cantidadRestante -= requerimiento
+      for (const req of ub) {
+        if (cantidadRestante >= req[1]) {
+          if (req[0] !== 'SAS') {
+            disponibilidad[req[0]] = req[1]
+            cantidadRestante -= req[1]
+            requ = actualizarRequerimiento(item, req[0], requ, 0)
+          } else {
+            disponibilidad[req[0]] = cantidadRestante
+          }
         } else {
-          disponibilidad[ubicacion] = 0
+          disponibilidad[req[0]] = 0
         }
       }
     })
@@ -94,36 +101,51 @@ const Principal = () => {
   }
 
   const obtenerDistribucion = (item, requerimientos) => {
-    const req = { ...requerimientos.find(requerimiento => requerimiento['N° Item'] === item) }
+    const req = { ...requerimientos.find(requerimiento => requerimiento['No. Item'] === item) }
 
     if (req) {
-      delete req['N° Item']
+      delete req['No. Item']
+      delete req.TOTAL
       return req
     }
+  }
+
+  const actualizarRequerimiento = (item, ubicacion, requerimientos, valor) => {
+    const r = requerimientos.find(requerimiento => requerimiento['No. Item'] === item)
+
+    r[ubicacion] = valor
+
+    return requerimientos
   }
 
   // TODO: GENERAR EXCEL
   const generateExcel = () => {
     const distribuciones = distribuirCantidad(datosDistribucion, nuevosDatos)
+
+    console.log(distribuciones)
     const wb = XLSX.utils.book_new()
     const datos = distribuciones.map((item) => [
       item['N° Item'],
       item['N° Pallet'],
       item.Cantidad,
-      item.Principal,
-      item.Atahualpa,
-      item.Carapungo,
-      item.CRJ
+      item.NORTE,
+      item.PRINCIPAL,
+      item.ATAHUALPA,
+      item.CARAPUNGO,
+      item.CRJ,
+      item.SAS
     ])
 
     const headers = [
       'N° Item',
       'N° Pallet',
       'Cantidad',
-      'Principal',
-      'Atahualpa',
-      'Carapungo',
-      'CRJ'
+      'NORTE',
+      'PRINCIPAL',
+      'ATAHUALPA',
+      'CARAPUNGO',
+      'CRJ',
+      'SAS'
     ]
 
     const wsData = [headers, ...datos]
