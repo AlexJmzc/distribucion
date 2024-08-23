@@ -8,12 +8,13 @@ const Distribucion = () => {
   const [datos, setDatos] = useState([])
   const [datosInformacion, setDatosInformacion] = useState([])
   const [datosPorcentajes, setDatosPorcentajes] = useState([])
+  const [datosRequerimientos, setDatosRequerimientos] = useState([])
 
   useEffect(() => {
     if (datos.length > 0) {
-      procesarDatos(datos)
+      procesarDatos(datos, datosInformacion)
     }
-  }, [datos])
+  }, [datos, datosInformacion])
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0]
@@ -33,20 +34,20 @@ const Distribucion = () => {
       const jsondatos2 = XLSX.utils.sheet_to_json(sheet2)
 
       setDatos(jsondatos)
-      console.log(jsondatos)
       setDatosInformacion(jsondatos2)
     }
 
     reader.readAsArrayBuffer(file)
   }
 
-  const procesarDatos = (datos) => {
+  const procesarDatos = (datos, datos2) => {
     sacarPorcentajes(datos)
+    sacarRequerimientoMinimo(datos2)
   }
 
   const sacarPorcentajes = (datos) => {
-    const nuevoArray = datos.map((dato) => {
-      const codigo = dato.Código
+    const nuevosDatos = datos.map((dato) => {
+      const codigo = dato['No.']
       const sumaCrj = sumarValoresPorPrefijo(dato, 'crj')
       const sumaGenui = sumarValoresPorPrefijo(dato, 'genui')
       const sumaSas = sumarValoresPorPrefijo(dato, 'sas')
@@ -56,7 +57,7 @@ const Distribucion = () => {
       const porcentajeSas = (sumaSas / total).toFixed(2)
 
       return {
-        Codigo: codigo,
+        item: codigo,
         crj: sumaCrj,
         porcentajeCrj,
         genui: sumaGenui,
@@ -67,61 +68,134 @@ const Distribucion = () => {
       }
     })
 
-    console.log(nuevoArray)
+    setDatosPorcentajes(nuevosDatos)
   }
-  function sumarValoresPorPrefijo (obj, prefijo) {
+
+  const sumarValoresPorPrefijo = (obj, prefijo) => {
     return Object.keys(obj)
       .filter(key => key.startsWith(prefijo))
       .reduce((total, key) => total + obj[key], 0)
   }
 
+  const sacarRequerimientoMinimo = (obj) => {
+    const nuevoObj = []
+
+    for (const key in obj) {
+      nuevoObj.push({
+        item: obj[key]['No.'],
+        cantidad: obj[key].Cantidad,
+        reqMinCrj: obj[key]['Crj Min'] - obj[key]['Crj Stock'],
+        reqMaxCrj: obj[key]['Crj Max'],
+        reqMinGenui: obj[key]['Genui Min'] - obj[key]['Genui Stock'],
+        reqMaxGenui: obj[key]['Genui Max'],
+        reqMinSas: obj[key]['Sas Min'] - obj[key]['Sas Stock'],
+        reqMaxSas: obj[key]['Sas Max']
+      })
+    }
+
+    setDatosRequerimientos(nuevoObj)
+  }
+
+  const combinarArrays = (array1, array2) => {
+    const datos = array1.map(obj1 => {
+      const obj2 = array2.find(obj => obj.item === obj1.item)
+      return obj2 ? { ...obj1, ...obj2 } : obj1
+    })
+
+    console.log(datos)
+    return datos
+  }
+
+  const repartirPorcentajes = () => {
+    const datos = combinarArrays(datosRequerimientos, datosPorcentajes)
+
+    return datos.map(obj => {
+      let cantidadCrj = (obj.cantidad * parseFloat(obj.porcentajeCrj)).toFixed(0)
+      if (cantidadCrj > obj.reqMinCrj) {
+        cantidadCrj = obj.reqMinCrj
+      }
+
+      let cantidadGenui = (obj.cantidad * parseFloat(obj.porcentajeGenui)).toFixed(0)
+      if (cantidadGenui > obj.reqMinGenui) {
+        cantidadGenui = obj.reqMinGenui
+      }
+
+      const cantidadRestante = obj.cantidad - (cantidadCrj + cantidadGenui)
+
+      return {
+        ...obj,
+        cantidadCrj,
+        cantidadGenui,
+        cantidadSas: 0,
+        cantidad: cantidadRestante
+      }
+    })
+  }
+
+  const repartirSobrantes = () => {
+    const datos = repartirPorcentajes()
+
+    return datos.map(obj => {
+      let diferencia = obj.reqMaxGenui - obj.cantidadGenui
+
+      if (diferencia > obj.Cantidad) {
+        diferencia = 0
+      }
+
+      const cantidadGenui = obj.cantidadGenui + diferencia
+      let cantidadSas = obj.cantidad - diferencia
+      if (cantidadSas < 0) {
+        cantidadSas = 0
+      }
+
+      return {
+        ...obj,
+        cantidadGenui,
+        cantidadSas,
+        cantidad: 0
+      }
+    })
+  }
+
   // TODO: GENERAR EXCEL
-  //   const generateExcel = () => {
-  //     const distribuciones = distribuirCantidad(datosDistribucion, nuevosDatos)
+  const generateExcel = () => {
+    const distribuciones = repartirSobrantes()
 
-  //     console.log(distribuciones)
-  //     const wb = XLSX.utils.book_new()
-  //     const datos = distribuciones.map((item) => [
-  //       item['N° Item'],
-  //       item['N° Pallet'],
-  //       item.Cantidad,
-  //       item.NORTE,
-  //       item.PRINCIPAL,
-  //       item.ATAHUALPA,
-  //       item.CARAPUNGO,
-  //       item.CRJ,
-  //       item.SAS
-  //     ])
+    console.log(distribuciones)
+    const wb = XLSX.utils.book_new()
+    const datos = distribuciones.map((item) => [
+      item.item,
+      Number(item.cantidadCrj) + Number(item.cantidadGenui) + Number(item.cantidadSas),
+      item.cantidadCrj,
+      item.cantidadGenui,
+      item.cantidadSas
+    ])
 
-  //     const headers = [
-  //       'N° Item',
-  //       'N° Pallet',
-  //       'Cantidad',
-  //       'NORTE',
-  //       'PRINCIPAL',
-  //       'ATAHUALPA',
-  //       'CARAPUNGO',
-  //       'CRJ',
-  //       'SAS'
-  //     ]
+    const headers = [
+      'N° Item',
+      'Cantidad Total',
+      'CRJ',
+      'GENUI',
+      'SAS'
+    ]
 
-  //     const wsData = [headers, ...datos]
-  //     const ws = XLSX.utils.aoa_to_sheet(wsData)
+    const wsData = [headers, ...datos]
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
 
-  //     XLSX.utils.book_append_sheet(wb, ws, 'Reporte')
+    XLSX.utils.book_append_sheet(wb, ws, 'Reporte')
 
-  //     const wsCols = headers.map((header, index) => ({
-  //       wch: header.length + 20
-  //     }))
-  //     ws['!cols'] = wsCols
+    const wsCols = headers.map((header, index) => ({
+      wch: header.length + 20
+    }))
+    ws['!cols'] = wsCols
 
-  //     XLSX.writeFile(wb, 'Distribuciones.xlsx')
-  //   }
+    XLSX.writeFile(wb, 'Distribuciones.xlsx')
+  }
 
   return (
     <div>
       <input type='file' onChange={handleFileUpload} />
-      {/* <button onClick={generateExcel}>Descargar</button> */}
+      <button onClick={generateExcel}>Descargar</button>
     </div>
   )
 }
