@@ -193,7 +193,7 @@ const Distribucion = () => {
   }
 
   return (
-    <div>
+    <div className='main'>
       <input type='file' onChange={handleFileUpload} />
       <button onClick={generateExcel}>Descargar</button>
     </div>

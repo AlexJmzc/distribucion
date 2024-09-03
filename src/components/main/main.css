@@ -1,0 +1,11 @@
+.main {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+}
+
+.main button {
+    width: fit-content;
+    height: 20px;
+}

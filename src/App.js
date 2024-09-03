@@ -1,12 +1,8 @@
-import Distribucion from './components/distribucion/distribución'
-import Principal from './components/principal/principal'
+import Main from './components/main/main'
 
 function App () {
   return (
-    <>
-      <Principal />
-      <Distribucion />
-    </>
+    <Main />
   )
 }
 
