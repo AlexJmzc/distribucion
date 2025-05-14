@@ -30,6 +30,7 @@ const Principal = () => {
 
       const jsondatos = XLSX.utils.sheet_to_json(sheet1)
       const jsondatosDistribucion = XLSX.utils.sheet_to_json(sheet2)
+
       setDatos(jsondatos)
       setDatosDistribucion(jsondatosDistribucion)
     }
@@ -68,36 +69,7 @@ const Principal = () => {
   //! COMBINAR EN UN SOLO ARRAY
   const combinarDatos = (datos) => {
     const dat = Object.values(datos).flat()
-
     setNuevosDatos(dat)
-  }
-
-  //! DISTRIBUIR
-  function distribuirCantidad (requerimientos, disponibilidades) {
-    let requ = requerimientos
-    disponibilidades.forEach((disponibilidad) => {
-      const item = disponibilidad['N° Item']
-      let cantidadRestante = disponibilidad.Cantidad
-
-      const ubicaciones = obtenerDistribucion(item, requerimientos)
-
-      const ub = Object.entries(ubicaciones).sort(([, a], [, b]) => b - a)
-      for (const req of ub) {
-        if (cantidadRestante >= req[1]) {
-          if (req[0] !== 'SAS') {
-            disponibilidad[req[0]] = req[1]
-            cantidadRestante -= req[1]
-            requ = actualizarRequerimiento(item, req[0], requ, 0)
-          } else {
-            disponibilidad[req[0]] = cantidadRestante
-          }
-        } else {
-          disponibilidad[req[0]] = 0
-        }
-      }
-    })
-
-    return disponibilidades
   }
 
   const obtenerDistribucion = (item, requerimientos) => {
@@ -118,11 +90,39 @@ const Principal = () => {
     return requerimientos
   }
 
+  //! DISTRIBUIR
+  function distribuirCantidad (requerimientos, disponibilidades) {
+    let requ = requerimientos
+    disponibilidades.forEach((disponibilidad) => {
+      const item = disponibilidad['N° Item']
+      let cantidadRestante = disponibilidad.Cantidad
+
+      const ubicaciones = obtenerDistribucion(item, requerimientos)
+
+      // Ordena las cantidades necesitadas de cada ubicación (De mayor a menor)
+      const ub = Object.entries(ubicaciones).sort(([, a], [, b]) => b - a)
+      for (const req of ub) {
+        if (cantidadRestante >= req[1]) {
+          if (req[0] !== 'SAS') {
+            disponibilidad[req[0]] = req[1]
+            cantidadRestante -= req[1]
+            requ = actualizarRequerimiento(item, req[0], requ, 0)
+          } else {
+            disponibilidad[req[0]] = cantidadRestante
+          }
+        } else {
+          disponibilidad[req[0]] = 0
+        }
+      }
+    })
+
+    return disponibilidades
+  }
+
   // TODO: GENERAR EXCEL
   const generateExcel = () => {
     const distribuciones = distribuirCantidad(datosDistribucion, nuevosDatos)
 
-    console.log(distribuciones)
     const wb = XLSX.utils.book_new()
     const datos = distribuciones.map((item) => [
       item['N° Item'],

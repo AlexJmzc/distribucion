@@ -102,7 +102,6 @@ const Distribucion = () => {
       return obj2 ? { ...obj1, ...obj2 } : obj1
     })
 
-    console.log(datos)
     return datos
   }
 
